@@ -70,5 +70,12 @@ public class TestPlugin : MonoBehaviour
             ai.ActivatePilot();
             UnityEngine.Debug.Log("[BDA-AI] Pilot AI enabled");
         }
+
+        // SURFACE PILOT AI
+        foreach (var ai in vessel.FindPartModulesImplementing<BDModuleSurfaceAI>())
+        {
+            ai.ActivatePilot();
+            UnityEngine.Debug.Log("[BDA-AI] Ground Pilot AI enabled");
+        }
     }
 }
