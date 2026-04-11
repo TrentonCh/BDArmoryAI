@@ -26,7 +26,7 @@ public class TestPlugin : MonoBehaviour
     private void OnVesselGoOffRails(Vessel vessel)
     {
         UnityEngine.Debug.Log("[BDA-AI] Vessel off rails: " + vessel.vesselName);
-        StartCoroutine(HandleVessel(vessel));
+        StartCoroutine(SettleToGround(vessel));
     }
 
     private IEnumerator HandleVessel(Vessel vessel)
@@ -42,8 +42,32 @@ public class TestPlugin : MonoBehaviour
 
         UnityEngine.Debug.Log("[BDA-AI] Enabling AI for: " + vessel.vesselName);
         EnableAI(vessel);
+    }
 
-        
+    private IEnumerator SettleToGround(Vessel vessel)
+    {
+        vessel.Landed = false;
+        vessel.situation = Vessel.Situations.FLYING;
+
+        float timeout = 1f;
+        float elapsed = 0f;
+
+        while (elapsed < timeout)
+        {
+            yield return new WaitForFixedUpdate();
+
+            if (vessel == null || !vessel.loaded)
+                yield break;
+
+            elapsed += TimeWarp.fixedDeltaTime;
+
+            vessel.SetWorldVelocity(Vector3d.zero);
+            UnityEngine.Debug.Log("[BDA-AI] Settling vessel to ground: " + vessel.vesselName);
+        }
+
+        yield return new WaitForSeconds(1.0f);
+        vessel.Landed = true;
+        vessel.situation = Vessel.Situations.LANDED;
     }
 
     private bool IsTargetVessel(Vessel vessel)
