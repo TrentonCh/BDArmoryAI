@@ -1,4 +1,7 @@
-﻿using BDArmory.Modules;
+﻿using BDArmory;
+using BDArmory.Control;
+using BDArmory.Modules;
+using BDArmory.UI;
 using KSP;
 using System;
 using System.Collections;
@@ -42,6 +45,7 @@ public class TestPlugin : MonoBehaviour
 
         UnityEngine.Debug.Log("[BDA-AI] Enabling AI for: " + vessel.vesselName);
         EnableAI(vessel);
+        EnableGaurdMode(vessel);
     }
 
     private IEnumerator SettleToGround(Vessel vessel)
@@ -49,7 +53,7 @@ public class TestPlugin : MonoBehaviour
         vessel.Landed = false;
         vessel.situation = Vessel.Situations.FLYING;
 
-        float timeout = 1f;
+        float timeout = 2.0f;
         float elapsed = 0f;
 
         while (elapsed < timeout)
@@ -68,6 +72,7 @@ public class TestPlugin : MonoBehaviour
         yield return new WaitForSeconds(1.0f);
         vessel.Landed = true;
         vessel.situation = Vessel.Situations.LANDED;
+        StartCoroutine(HandleVessel(vessel));
     }
 
     private bool IsTargetVessel(Vessel vessel)
@@ -88,18 +93,37 @@ public class TestPlugin : MonoBehaviour
 
     private void EnableAI(Vessel vessel)
     {
+        UnityEngine.Debug.Log("DEBUG1");
         // PILOT AI
-        foreach (var ai in vessel.FindPartModulesImplementing<BDModulePilotAI>())
+        foreach (var ai in vessel.FindPartModulesImplementing<BDArmory.Control.BDModulePilotAI>())
         {
+            UnityEngine.Debug.Log("DEBUG3");
             ai.ActivatePilot();
             UnityEngine.Debug.Log("[BDA-AI] Pilot AI enabled");
+            
         }
 
         // SURFACE PILOT AI
-        foreach (var ai in vessel.FindPartModulesImplementing<BDModuleSurfaceAI>())
+        foreach (var ai in vessel.FindPartModulesImplementing<BDArmory.Control.BDModuleSurfaceAI>())
         {
+            UnityEngine.Debug.Log("DEBUG4");
             ai.ActivatePilot();
-            UnityEngine.Debug.Log("[BDA-AI] Ground Pilot AI enabled");
+            UnityEngine.Debug.Log("[BDA-AI] Pilot AI enabled");
+        }
+    }
+
+    private void EnableGaurdMode(Vessel vessel)
+    {
+        foreach (var wm in vessel.FindPartModulesImplementing<BDArmory.Control.MissileFire>())
+        {
+            if (!wm.guardMode)
+            {
+                wm.ToggleGuardMode();
+                UnityEngine.Debug.Log("[BDA-AI] Guard mode enabled for weapon: " + vessel.name);
+            }
+
+
+            UnityEngine.Debug.Log("[BDA-AI] Guard mode enabled for weapon: " + wm.part.partName);
         }
     }
 }
