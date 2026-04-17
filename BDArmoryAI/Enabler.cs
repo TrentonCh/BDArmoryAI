@@ -21,7 +21,7 @@ namespace BDArmoryAI
         {
             UnityEngine.Debug.Log("BDArmoryAIEnabler Plugin loaded!");
             GameEvents.onVesselGoOffRails.Add(OnVesselGoOffRails);
-            GameEvents.onPartDie.Add(DestroyAI);
+
         }
 
         void OnDestroy()
@@ -131,23 +131,6 @@ namespace BDArmoryAI
 
                 UnityEngine.Debug.Log("[BDA-AI] Guard mode enabled for weapon: " + wm.part.partName);
             }
-        }
-        
-        private void DestroyAI(Part part)
-        {
-            if (part == null || (part.FindModuleImplementing<BDModulePilotAI>() != null) || (part.FindModuleImplementing<BDModuleSurfaceAI>() != null))
-                return;
-
-            if (part.vessel.vesselName.Contains("Enemy"))
-            {
-                UnityEngine.Debug.Log("[BDA-AI] AI Module destroyed on " + part.vessel.vesselName);
-                part.vessel.Die();
-                foreach(Part otherParts in part.vessel.Parts)
-                {
-                    otherParts.Die();
-                }
-                UnityEngine.Debug.Log("[BDA-AI] Vessel destroyed");
-            }   
         }
     }
 }

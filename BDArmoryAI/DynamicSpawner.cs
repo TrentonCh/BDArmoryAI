@@ -27,6 +27,8 @@ namespace BDArmoryAI
 
         private string craftsFolder = "GameData/BDArmoryAI/Ships/";
         private List<string> craftFiles = new List<string>();
+        private string[] craftFilesArray;
+
         private int selectedCraftIndex = 0;
         private bool craftsLoaded = false;
         private int quantityToSpawn = 1;
@@ -57,6 +59,7 @@ namespace BDArmoryAI
         {
             UnityEngine.Debug.Log("DynamicSpawner Plugin loaded!");
             GameEvents.onGUIApplicationLauncherReady.Add(OnToolbarReady);
+            GameEvents.onPartDie.Add(DestroyAI);
         }
 
         void OnToolbarReady()
@@ -143,7 +146,7 @@ namespace BDArmoryAI
             }
 
             GUILayout.Label("Select Craft:");
-            selectedCraftIndex = GUILayout.SelectionGrid(selectedCraftIndex, craftFiles.ToArray(), 1);
+            selectedCraftIndex = GUILayout.SelectionGrid(selectedCraftIndex, craftFilesArray, 1);
 
             GUILayout.Space(10);
 
@@ -225,12 +228,9 @@ namespace BDArmoryAI
 
                     for (int i = 0; i < quantityToSpawn; i++)
                     {
-                        FlightGlobals.ForceSetActiveVessel(FlightGlobals.ActiveVessel);
+                        
                         Vessel spawnedVessel = VesselSpawner.SpawnVesselFromCraftFile(craftsFolder + craftFiles[selectedCraftIndex] + ".craft", spawnPos, 0f, 0f, 0f, out shipFacility);
-                        if (spawnFlying)
-                            StartCoroutine(SpawnFlying(spawnedVessel));
-                        else
-                            StartCoroutine(SpawnLanded(spawnedVessel));
+                        StartCoroutine(SetupSpawnVessel(spawnedVessel));
                         spawnPos.x += 0.006f;
                     }
                     UnityEngine.Debug.Log("Spawned vessel at: " + spawnPos + " : " + FlightGlobals.currentMainBody);
@@ -261,34 +261,60 @@ namespace BDArmoryAI
             {
                 UnityEngine.Debug.LogWarning("[BDA-AI] Dynamic Spawner: No craft files found in " + fullPath);
             }
-            
+            craftFilesArray = craftFiles.ToArray();
             craftsLoaded = true;
         }
 
-        IEnumerator SpawnFlying(Vessel vessel)
+        IEnumerator SetupSpawnVessel(Vessel vessel)
         {
-            yield return new WaitForSeconds(2.5f);
-
             if (vessel == null)
                 yield break;
 
-            vessel.SetPosition(FlightGlobals.currentMainBody.GetWorldSurfacePosition(vessel.latitude, vessel.longitude, spawnAltitude));
+            yield return new WaitForSeconds(2.5f);
 
-            Vector3d forward = vessel.transform.up;
-            Vector3d surfaceVelocity = forward * spawnSpeed + FlightGlobals.currentMainBody.getRFrmVel(vessel.CoM);
 
-            vessel.SetWorldVelocity(surfaceVelocity);
-            UnityEngine.Debug.Log("[BDA-AI] Applied initial velocity of " + spawnSpeed + " m/s to vessel: " + vessel.vesselName);
+
+            if (spawnFlying)
+            {
+
+                vessel.SetPosition(FlightGlobals.currentMainBody.GetWorldSurfacePosition(vessel.latitude, vessel.longitude, spawnAltitude));
+
+                Vector3d forward = vessel.transform.up;
+                Vector3d surfaceVelocity = forward * spawnSpeed + FlightGlobals.currentMainBody.getRFrmVel(vessel.CoM);
+
+                vessel.SetWorldVelocity(surfaceVelocity);
+                vessel.Landed = false;
+                vessel.Splashed = false;
+                vessel.situation = Vessel.Situations.FLYING;
+                UnityEngine.Debug.Log("[BDA-AI] Applied initial velocity of " + spawnSpeed + " m/s to vessel: " + vessel.vesselName);
+            }
+            else
+            {
+                vessel.SetPosition(FlightGlobals.currentMainBody.GetWorldSurfacePosition(vessel.latitude, vessel.longitude, spawnAltitude));
+                vessel.Landed = true;
+                vessel.Splashed = false;
+                vessel.situation = Vessel.Situations.LANDED;
+                vessel.GoOnRails();
+                vessel.GoOffRails();
+            }
         }
 
-        IEnumerator SpawnLanded(Vessel vessel)
+        private void DestroyAI(Part part)
         {
-            yield return new WaitForSeconds(0f);
-            vessel.Landed = true;
-            vessel.Splashed = false;
-            vessel.situation = Vessel.Situations.LANDED;
+            if (part == null || (part.FindModuleImplementing<BDModulePilotAI>() != null) || (part.FindModuleImplementing<BDModuleSurfaceAI>() != null))
+                return;
 
-            vessel.GoOnRails();
+            if (part.vessel.vesselName.Contains("Enemy"))
+            {
+                UnityEngine.Debug.Log("[BDA-AI] AI Module destroyed on " + part.vessel.vesselName);
+                part.vessel.Die();
+                foreach (Part otherParts in part.vessel.Parts)
+                {
+                    if (otherParts != null)
+                        otherParts.Die();
+                }
+                UnityEngine.Debug.Log("[BDA-AI] Vessel destroyed");
+            }
         }
     }
 }
