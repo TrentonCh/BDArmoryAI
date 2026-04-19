@@ -1,4 +1,4 @@
-# BDArmoryAI
+# BDArmoryAISpawner
 
 INSTALLATION:
 Drop the folders in your root game directory.
