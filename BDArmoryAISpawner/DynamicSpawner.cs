@@ -1,4 +1,5 @@
 ﻿using BDArmory;
+using BDArmory.Competition;
 using BDArmory.Control;
 using BDArmory.Modules;
 using BDArmory.UI;
@@ -26,8 +27,8 @@ namespace BDArmoryAISpawner
         private Rect windowRect = new Rect(300, 200, 300, 200);
 
         private string craftsFolder = "GameData/BDArmoryAISpawner/Ships/";
-        private List<string> craftFiles = new List<string>();
-        private string[] craftFilesArray;
+        private List<CraftSelection> craftSelectionList = new List<CraftSelection>(); 
+
 
         private int selectedCraftIndex = 0;
         private bool craftsLoaded = false;
@@ -36,12 +37,12 @@ namespace BDArmoryAISpawner
         private double spawnRange = 50000.0;
         private bool useActiveVessel = true;
 
-        private bool spawnFlying = false;
-        private double spawnAltitude = 500.0;
-        private double spawnSpeed = 0;
+
 
         private double manualLat = 0.0;
         private double manualLon = 0.0;
+
+        private bool friendly = false;
 
         void Awake()
         {
@@ -125,28 +126,37 @@ namespace BDArmoryAISpawner
                 }
             }
 
-            spawnFlying = GUILayout.Toggle(spawnFlying, "Spawn Flying");
-
-            if (spawnFlying)
-            {
-                GUILayout.Label("Altitude (m): " + spawnAltitude.ToString("F0"));
-                spawnAltitude = GUILayout.HorizontalSlider((float)spawnAltitude, 10f, 50000f);
-                GUILayout.Label("Speed (m/s): " + spawnSpeed.ToString("F0"));
-                spawnSpeed = GUILayout.HorizontalSlider((float)spawnSpeed, 0f, 1000f);
-            }
-
             GUILayout.Label("Spawn Range (m): " + spawnRange.ToString("F0"));
             spawnRange = GUILayout.HorizontalSlider((float)spawnRange, 1000f, 50000f);
 
-            GUILayout.Label("Spawn Quantity: " + quantityToSpawn);
-            string qtyStr = GUILayout.TextField(quantityToSpawn.ToString());
-            if (int.TryParse(qtyStr, out int parsedQty))
+            GUILayout.Label("Select Crafts:");
+
+            foreach (var craft in craftSelectionList)
             {
-                quantityToSpawn = parsedQty;
+                GUILayout.BeginHorizontal();
+                craft.selected = GUILayout.Toggle(craft.selected, craft.name.ToString(), GUILayout.Width(150));
+
+                string qty = GUILayout.TextField(craft.quantity.ToString(), GUILayout.Width(50));
+                if (int.TryParse(qty, out int parsedCraftQty))
+                {
+                    craft.quantity = Mathf.Max(1, parsedCraftQty);
+                }
+
+                craft.spawnFlying = GUILayout.Toggle(craft.spawnFlying, "Spawn Flying");
+
+                if (craft.spawnFlying)
+                {
+                    
+                    GUILayout.Label("Altitude (m): " + craft.spawnAltitude.ToString("F0"));
+                    craft.spawnAltitude = GUILayout.HorizontalSlider((float)craft.spawnAltitude, 10f, 25000f);
+                    GUILayout.Label("Speed (m/s): " + craft.spawnSpeed.ToString("F0"));
+                    craft.spawnSpeed = GUILayout.HorizontalSlider((float)craft.spawnSpeed, 0f, 1000f);
+                }
+
+                GUILayout.EndHorizontal();
             }
 
-            GUILayout.Label("Select Craft:");
-            selectedCraftIndex = GUILayout.SelectionGrid(selectedCraftIndex, craftFilesArray, 1);
+            friendly = GUILayout.Toggle(friendly, "Friendly");
 
             GUILayout.Space(10);
 
@@ -217,31 +227,39 @@ namespace BDArmoryAISpawner
                             return;
                         }
                     } while (body.TerrainAltitude(spawnPos.x, spawnPos.y) <= 0.5);
-                    if (spawnFlying)
-                    {
-                        spawnPos.z = spawnAltitude + FlightGlobals.currentMainBody.TerrainAltitude(spawnPos.x, spawnPos.y);
-                    }
-                    else
-                    {
-                        spawnPos.z = 0.2f + FlightGlobals.currentMainBody.TerrainAltitude(spawnPos.x, spawnPos.y);
-                    }
+                    
 
-                    for (int i = 0; i < quantityToSpawn; i++)
+                    foreach (var craft in craftSelectionList)
                     {
+                        if (!craft.selected)
+                            continue;
+
+                        if (craft.spawnFlying)
+                        {
+                            spawnPos.z = craft.spawnAltitude + FlightGlobals.currentMainBody.TerrainAltitude(spawnPos.x, spawnPos.y);
+                        }
+                        else
+                        {
+                            spawnPos.z = 0.2f + FlightGlobals.currentMainBody.TerrainAltitude(spawnPos.x, spawnPos.y);
+                        }
+
+                        for (int i = 0; i < craft.quantity; i++)
+                        {
+                            Vessel spawnedVessel = VesselSpawner.SpawnVesselFromCraftFile(craftsFolder + craft.name + ".craft", spawnPos, 0f, 0f, 0f, out shipFacility);
+                            spawnedVessel.easingInToSurface = false;
+                            StartCoroutine(SetupSpawnVessel(spawnedVessel, craft));
+                            spawnPos.x += 0.006f;
+                        }
+                    }
                         
-                        Vessel spawnedVessel = VesselSpawner.SpawnVesselFromCraftFile(craftsFolder + craftFiles[selectedCraftIndex] + ".craft", spawnPos, 0f, 0f, 0f, out shipFacility);
-                        StartCoroutine(SetupSpawnVessel(spawnedVessel));
-                        spawnPos.x += 0.006f;
-                    }
                     UnityEngine.Debug.Log("Spawned vessel at: " + spawnPos + " : " + FlightGlobals.currentMainBody);
-
                 }
             }
         }
 
         void LoadCraftNames()
         {
-            craftFiles.Clear();    
+            craftSelectionList.Clear();    
             string fullPath = System.IO.Path.Combine(KSPUtil.ApplicationRootPath, craftsFolder);
 
             if (System.IO.Directory.Exists(fullPath))
@@ -249,7 +267,7 @@ namespace BDArmoryAISpawner
                 var files = System.IO.Directory.GetFiles(fullPath, "*.craft");
                 foreach (var file in files)
                 {
-                    craftFiles.Add(System.IO.Path.GetFileNameWithoutExtension(file));
+                    craftSelectionList.Add(new CraftSelection(System.IO.Path.GetFileNameWithoutExtension(file)));
                 }
             }
             else
@@ -257,15 +275,14 @@ namespace BDArmoryAISpawner
                 UnityEngine.Debug.LogError("[BDA-AI] Dynamic Spawner: Crafts folder not found at " + fullPath);
             }
             
-            if (craftFiles.Count == 0)
+            if (craftSelectionList.Count == 0)
             {
                 UnityEngine.Debug.LogWarning("[BDA-AI] Dynamic Spawner: No craft files found in " + fullPath);
             }
-            craftFilesArray = craftFiles.ToArray();
             craftsLoaded = true;
         }
 
-        IEnumerator SetupSpawnVessel(Vessel vessel)
+        IEnumerator SetupSpawnVessel(Vessel vessel, CraftSelection craft)
         {
             if (vessel == null)
                 yield break;
@@ -274,20 +291,20 @@ namespace BDArmoryAISpawner
 
 
 
-            if (spawnFlying)
+            if (craft.spawnFlying)
             {
 
-                vessel.SetPosition(FlightGlobals.currentMainBody.GetWorldSurfacePosition(vessel.latitude, vessel.longitude, spawnAltitude));
+                vessel.SetPosition(FlightGlobals.currentMainBody.GetWorldSurfacePosition(vessel.latitude, vessel.longitude, craft.spawnAltitude));
 
                 Vector3d forward = vessel.transform.up;
-                Vector3d surfaceVelocity = forward * spawnSpeed + FlightGlobals.currentMainBody.getRFrmVel(vessel.CoM);
+                Vector3d surfaceVelocity = forward * craft.spawnSpeed + FlightGlobals.currentMainBody.getRFrmVel(vessel.CoM);
 
                 vessel.Landed = false;
                 vessel.Splashed = false;
                 vessel.situation = Vessel.Situations.FLYING;
 
                 vessel.SetWorldVelocity(surfaceVelocity);
-                UnityEngine.Debug.Log("[BDA-AI] Applied initial velocity of " + spawnSpeed + " m/s to vessel: " + vessel.vesselName);
+                UnityEngine.Debug.Log("[BDA-AI] Applied initial velocity of " + craft.spawnSpeed + " m/s to vessel: " + vessel.vesselName);
             }
             else
             {
@@ -321,19 +338,15 @@ namespace BDArmoryAISpawner
             // PILOT AI
             foreach (var ai in vessel.FindPartModulesImplementing<BDArmory.Control.BDModulePilotAI>())
             {
-
                 ai.ActivatePilot();
                 UnityEngine.Debug.Log("[BDA-AI] Pilot AI enabled");
-
             }
 
             // SURFACE PILOT AI
             foreach (var ai in vessel.FindPartModulesImplementing<BDArmory.Control.BDModuleSurfaceAI>())
             {
-
                 ai.ActivatePilot();
-                UnityEngine.Debug.Log("[BDA-AI] Pilot AI enabled");
-
+                UnityEngine.Debug.Log("[BDA-AI] Surface Pilot AI enabled");
             }
         }
 
@@ -344,12 +357,38 @@ namespace BDArmoryAISpawner
                 if (!wm.guardMode)
                 {
                     wm.ToggleGuardMode();
-                    UnityEngine.Debug.Log("[BDA-AI] Guard mode enabled for weapon: " + vessel.name);
-                    UnityEngine.Debug.Log("Spawned at " + vessel.GetWorldPos3D());
+                    
+                    
                 }
-
-
+                if (friendly)
+                {
+                    UnityEngine.Debug.Log("[BDA-AI] Friendly " + vessel.name);
+                    wm.SetTeam(BDTeam.Get("A"));
+                }
+                else
+                {
+                    UnityEngine.Debug.Log("[BDA-AI] Enemy " + vessel.name);
+                    wm.SetTeam(BDTeam.Get("B"));
+                }
                 UnityEngine.Debug.Log("[BDA-AI] Guard mode enabled for weapon: " + wm.part.partName);
+            }
+        }
+
+        class CraftSelection
+        {
+            public string name;
+            public bool selected;
+            public int quantity;
+            public bool spawnFlying = false;
+            public double spawnAltitude = 500.0;
+            public double spawnSpeed = 0;
+
+            public CraftSelection(string name)
+            {
+                this.name = name;
+                selected = false;
+                quantity = 1;
+
             }
         }
     }
