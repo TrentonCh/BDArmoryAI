@@ -1,7 +1,7 @@
 # BDArmoryAISpawner
 
 INSTALLATION:
-Drop the folders in your root game directory.
+Drop the BDArmoryAISpawner folder in your root game directory.
 
 REQUIRMENTS/DEPENDENCIES:
 BDArmory Plus, Physics Range Extender
